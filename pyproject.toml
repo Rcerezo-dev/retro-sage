@@ -17,7 +17,7 @@ dependencies = []
 embeddings = ["sentence-transformers>=3", "numpy>=1.26"]
 # v0.3 — recomendaciones explicadas con Claude API
 chat = ["anthropic>=0.40"]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "ruff>=0.6", "pre-commit>=3"]
 
 [project.scripts]
 retro-sage = "retro_sage.cli:main"

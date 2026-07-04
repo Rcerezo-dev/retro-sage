@@ -84,7 +84,13 @@ tests/              # pytest, fixtures sintéticas, sin red
 ```bash
 ruff format --check src tests && ruff check src tests
 pytest -q
+
+# Hooks locales (una vez):
+pre-commit install && pre-commit install --hook-type pre-push
 ```
+
+CI (GitHub Actions) corre en cada PR y push a `develop`/`main`: `Lint (ruff)`
++ `Tests (pytest)` en Python 3.11 y 3.12 — el mismo pipeline que Retro Vault.
 
 Mismas convenciones que Retro Vault: ramas por tarea → PR a `develop`,
 `main` estable, formato ruff. Núcleo stdlib-only; el ML entra solo vía extras
