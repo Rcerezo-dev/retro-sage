@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retro-sage"
+version = "0.1.0"
+description = "Game recommender companion for Retro Vault — builds your player profile and recommends from your own collection."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+# El núcleo v0.1 es stdlib-only a propósito (misma filosofía que Retro Vault).
+dependencies = []
+
+[project.optional-dependencies]
+# v0.2 — embeddings locales y búsqueda semántica
+embeddings = ["sentence-transformers>=3", "numpy>=1.26"]
+# v0.3 — recomendaciones explicadas con Claude API
+chat = ["anthropic>=0.40"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+retro-sage = "retro_sage.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src", "tests"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["retro_sage"]

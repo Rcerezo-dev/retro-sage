@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+# Datos locales / exports del Vault
+export*.json
+*.local.*
+# Cachés de modelos (v0.2)
+.cache/
+*.npy
+*.pkl
