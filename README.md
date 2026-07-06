@@ -35,6 +35,8 @@ Prerrequisitos en el lado Vault para exprimir v0.2+: scraping masivo hecho
 (sin descripciones no hay semántica) y persistir `genres_list`/`players`
 (migración pendiente allí — ver `docs/ideas/propuestas-recomendador-nlp.md`).
 
+Roadmap completo, fase a fase y con criterios de cierre: [ROADMAP.md](ROADMAP.md).
+
 ---
 
 ## Quickstart
