@@ -1,0 +1,24 @@
+# Pre-commit hooks — activar una vez con:
+#   pre-commit install
+#   pre-commit install --hook-type pre-push
+# Espeja el gate "Lint (ruff)" de CI para cazar los fallos antes de GitHub.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^(src|tests)/
+      - id: ruff-format
+        files: ^(src|tests)/
+
+  # Suite completa antes de cada push (no en cada commit).
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: conda run -n rom_manager --no-capture-output python -m pytest -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

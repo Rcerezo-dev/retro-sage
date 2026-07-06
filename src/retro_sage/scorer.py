@@ -6,16 +6,15 @@ Cada item lleva una razón legible en español para el panel del Vault.
 
 from __future__ import annotations
 
-from .profile import Profile, decade_of, split_genres
+from .profile import Profile, _as_number, affinity_tokens, decade_of
 
-_WEIGHT_GENRE = 0.60
-_WEIGHT_PLATFORM = 0.25
-_WEIGHT_DECADE = 0.15
+# (género, plataforma, década) — sobreescribible desde la CLI con --weights
+DEFAULT_WEIGHTS = (0.60, 0.25, 0.15)
 
 
 def is_candidate(game: dict) -> bool:
     """Candidato = juego del que el usuario aún no ha dicho ni jugado nada."""
-    if (game.get("play_count") or 0) > 0:
+    if _as_number(game.get("play_count")) > 0:
         return False
     if (game.get("play_status") or "") in ("completed", "playing", "dropped"):
         return False
@@ -59,8 +58,14 @@ def _build_reason(game: dict, genre_hit: str | None, decade_hit: int | None) -> 
     return "Sin jugar todavía y " + " y ".join(parts) + "."
 
 
-def recommend(games: list[dict], profile: Profile, top: int = 10) -> list[dict]:
+def recommend(
+    games: list[dict],
+    profile: Profile,
+    top: int = 10,
+    weights: tuple[float, float, float] = DEFAULT_WEIGHTS,
+) -> list[dict]:
     """Devuelve los `top` items {id, title, platform, score, reason} para el Vault."""
+    weight_genre, weight_platform, weight_decade = weights
     genre_prefs = _normalized(profile.genres)
     platform_prefs = _normalized(profile.platforms)
     decade_prefs = _normalized(profile.decades)
@@ -69,7 +74,7 @@ def recommend(games: list[dict], profile: Profile, top: int = 10) -> list[dict]:
     for game in games:
         if not is_candidate(game):
             continue
-        genres = split_genres(game.get("genre"))
+        genres = affinity_tokens(game)
         platform = (game.get("platform") or "").lower()
         dec = decade_of(game.get("year"))
 
@@ -78,13 +83,13 @@ def recommend(games: list[dict], profile: Profile, top: int = 10) -> list[dict]:
         decade_score = _affinity(decade_prefs, [dec] if dec is not None else [])
 
         score = (
-            _WEIGHT_GENRE * genre_score
-            + _WEIGHT_PLATFORM * platform_score
-            + _WEIGHT_DECADE * decade_score
+            weight_genre * genre_score
+            + weight_platform * platform_score
+            + weight_decade * decade_score
         )
         # Un género que el usuario rechazó explícitamente (★1, dropped) resta:
         # que la época coincida no salva a un juego de deportes si odias los deportes.
-        score -= _WEIGHT_GENRE * _dislike(genre_prefs, genres)
+        score -= weight_genre * _dislike(genre_prefs, genres)
         if score <= 0:
             continue
 

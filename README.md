@@ -35,6 +35,8 @@ Prerrequisitos en el lado Vault para exprimir v0.2+: scraping masivo hecho
 (sin descripciones no hay semántica) y persistir `genres_list`/`players`
 (migración pendiente allí — ver `docs/ideas/propuestas-recomendador-nlp.md`).
 
+Roadmap completo, fase a fase y con criterios de cierre: [ROADMAP.md](ROADMAP.md).
+
 ---
 
 ## Quickstart
@@ -46,6 +48,8 @@ pip install -e ".[dev]"
 retro-sage recommend                  # imprime el top 10 en terminal
 retro-sage recommend --push           # además lo envía al panel "Recomendados"
 retro-sage recommend --top 5 --vault http://127.0.0.1:7777
+retro-sage recommend --weights 40,40,20   # ajusta género,plataforma,década
+retro-sage profile                        # inspecciona tus afinidades
 
 # Sin Vault corriendo (desde un export descargado):
 retro-sage recommend --file export.json
@@ -84,7 +88,13 @@ tests/              # pytest, fixtures sintéticas, sin red
 ```bash
 ruff format --check src tests && ruff check src tests
 pytest -q
+
+# Hooks locales (una vez):
+pre-commit install && pre-commit install --hook-type pre-push
 ```
+
+CI (GitHub Actions) corre en cada PR y push a `develop`/`main`: `Lint (ruff)`
++ `Tests (pytest)` en Python 3.11 y 3.12 — el mismo pipeline que Retro Vault.
 
 Mismas convenciones que Retro Vault: ramas por tarea → PR a `develop`,
 `main` estable, formato ruff. Núcleo stdlib-only; el ML entra solo vía extras

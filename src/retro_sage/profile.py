@@ -38,6 +38,20 @@ def split_genres(genre: str | None) -> list[str]:
     return [tok.strip().lower() for tok in _GENRE_SPLIT.split(genre) if tok.strip()]
 
 
+def affinity_tokens(game: dict) -> list[str]:
+    """Tokens de afinidad de un juego: géneros + tags del usuario, normalizados.
+
+    ponytail: los tags entran al mismo espacio que los géneros en vez de ser
+    una 4ª dimensión — un tag compartido entre un favorito y un candidato
+    puntúa vía el peso de género. Dimensión propia solo si algún día estorba.
+    """
+    tokens = split_genres(game.get("genre"))
+    tags = game.get("tags") or []
+    if isinstance(tags, list):
+        tokens += [str(t).strip().lower() for t in tags if str(t).strip()]
+    return list(dict.fromkeys(tokens))  # dedup conservando orden
+
+
 def decade_of(year) -> int | None:
     """1994 → 1990. Acepta int o str; None si no es parseable."""
     try:
@@ -47,14 +61,22 @@ def decade_of(year) -> int | None:
     return (y // 10) * 10 if 1950 <= y <= 2100 else None
 
 
+def _as_number(value) -> float:
+    """float(value) tolerante: 0.0 si el export trae basura ('N/A', None, [])."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def signal_weight(game: dict) -> float:
     """Peso de la señal de un juego. 0.0 = el usuario no ha dicho nada de él."""
     weight = 0.0
-    rating = game.get("user_rating")
+    rating = _as_number(game.get("user_rating"))
     if rating:
-        weight += (float(rating) - 2.5) / 2.5  # 1★ → -0.6 · 3★ → +0.2 · 5★ → +1.0
+        weight += (rating - 2.5) / 2.5  # 1★ → -0.6 · 3★ → +0.2 · 5★ → +1.0
     weight += _STATUS_WEIGHT.get(game.get("play_status") or "", 0.0)
-    play_count = game.get("play_count") or 0
+    play_count = _as_number(game.get("play_count"))
     if play_count > 0:
         weight += min(play_count, 10) / 10 * 0.5  # jugarlo mucho es señal suave
     return weight
@@ -68,7 +90,7 @@ def build_profile(games: list[dict]) -> Profile:
         if weight == 0.0:
             continue
         profile.signals += 1
-        for genre in split_genres(game.get("genre")):
+        for genre in affinity_tokens(game):
             profile.genres[genre] = profile.genres.get(genre, 0.0) + weight
         platform = (game.get("platform") or "").lower()
         if platform:
