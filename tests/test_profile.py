@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from retro_sage.profile import build_profile, decade_of, signal_weight, split_genres
+from retro_sage.profile import (
+    affinity_tokens,
+    build_profile,
+    decade_of,
+    signal_weight,
+    split_genres,
+)
 
 
 def test_split_genres_tokenizes_and_normalizes():
@@ -33,6 +39,32 @@ def test_build_profile_aggregates_likes_and_dislikes(library):
     assert profile.platforms["snes"] > 0
     assert profile.decades[1990] > 0
     assert profile.is_usable()
+
+
+def test_affinity_tokens_merges_genres_and_tags():
+    game = {"genre": "RPG, Action RPG", "tags": ["Metroidvania", "rpg", "  "]}
+    assert affinity_tokens(game) == ["rpg", "action rpg", "metroidvania"]
+    assert affinity_tokens({"genre": None, "tags": "no-una-lista"}) == []
+
+
+def test_tags_feed_the_profile_and_reach_candidates():
+    games = [
+        {
+            "id": 1,
+            "title": "a",
+            "platform": "snes",
+            "genre": "RPG",
+            "user_rating": 5,
+            "tags": ["metroidvania"],
+        },
+    ]
+    profile = build_profile(games)
+    assert profile.genres["metroidvania"] > 0
+
+
+def test_signal_weight_tolerates_garbage_types():
+    assert signal_weight({"user_rating": "N/A", "play_count": "no"}) == 0.0
+    assert signal_weight({"play_count": "3"}) > 0  # numérico como string cuenta
 
 
 def test_profile_unusable_without_signals():

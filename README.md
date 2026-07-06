@@ -48,6 +48,8 @@ pip install -e ".[dev]"
 retro-sage recommend                  # imprime el top 10 en terminal
 retro-sage recommend --push           # además lo envía al panel "Recomendados"
 retro-sage recommend --top 5 --vault http://127.0.0.1:7777
+retro-sage recommend --weights 40,40,20   # ajusta género,plataforma,década
+retro-sage profile                        # inspecciona tus afinidades
 
 # Sin Vault corriendo (desde un export descargado):
 retro-sage recommend --file export.json

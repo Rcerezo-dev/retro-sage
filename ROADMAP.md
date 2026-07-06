@@ -21,14 +21,14 @@ Perfil de jugador + scoring por afinidad, sin dependencias.
 - [x] CLI `retro-sage recommend` con `--push`, `--top`, `--vault`, `--file`
 - [x] Tests sin red, CI (ruff + pytest, py3.11/3.12), pre-commit — espejo de Retro Vault
 
-## ⬜ Fase 1 — v0.1.x · Robustez y señales extra
+## 🔶 Fase 1 — v0.1.x · Robustez y señales extra (código hecho; falta release)
 
 Endurecer lo que ya existe antes de añadir ML. Sin dependencias nuevas.
 
-- [ ] Usar `tags` del export como señal de afinidad adicional
-- [ ] Manejo de errores del Vault: timeouts, respuestas parciales, mensajes claros en CLI
-- [ ] `retro-sage profile`: subcomando que imprime tu perfil (debug y transparencia)
-- [ ] Pesos del scoring configurables por flag (`--weights 50,30,20`) para experimentar
+- [x] Usar `tags` del export como señal de afinidad adicional (entran al espacio de géneros)
+- [x] Manejo de errores del Vault: timeouts, respuestas parciales, mensajes claros en CLI
+- [x] `retro-sage profile`: subcomando que imprime tu perfil (debug y transparencia)
+- [x] Pesos del scoring configurables por flag (`--weights 60,25,15`) para experimentar
 - [ ] Primera release etiquetada (`v0.1.0` en GitHub) desde `main`
 
 **Hecho cuando:** la CLI nunca muere con traceback ante un Vault caído o un export raro.

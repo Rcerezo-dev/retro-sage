@@ -23,6 +23,14 @@ class VaultError(RuntimeError):
     """Fallo de comunicación o respuesta inesperada del Vault."""
 
 
+def _validated(payload, source: str) -> dict:
+    """Garantiza el shape mínimo: dict con 'games' lista de dicts."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("games"), list):
+        raise VaultError(f"'{source}' no parece un export de Retro Vault (falta 'games').")
+    payload["games"] = [g for g in payload["games"] if isinstance(g, dict)]
+    return payload
+
+
 def fetch_library(vault_url: str = DEFAULT_VAULT_URL, timeout: float = 30.0) -> dict:
     """Descarga la biblioteca completa (jugados y no jugados) del Vault."""
     url = vault_url.rstrip("/") + "/api/export-history"
@@ -34,18 +42,19 @@ def fetch_library(vault_url: str = DEFAULT_VAULT_URL, timeout: float = 30.0) -> 
             f"No se pudo obtener la biblioteca de {url}: {exc}. "
             "¿Está Retro Vault corriendo? (rommgr serve)"
         ) from exc
-    if not isinstance(payload, dict) or "games" not in payload:
-        raise VaultError(f"Respuesta inesperada de {url}: falta la clave 'games'.")
-    return payload
+    return _validated(payload, url)
 
 
 def load_library_file(path: str) -> dict:
     """Carga un export descargado a mano (modo offline / Vault con PIN)."""
-    with open(path, encoding="utf-8") as fh:
-        payload = json.load(fh)
-    if "games" not in payload:
-        raise VaultError(f"'{path}' no parece un export de Retro Vault (falta 'games').")
-    return payload
+    try:
+        with open(path, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except OSError as exc:
+        raise VaultError(f"No se pudo leer '{path}': {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise VaultError(f"'{path}' no es JSON válido: {exc}") from exc
+    return _validated(payload, path)
 
 
 def push_recommendations(
