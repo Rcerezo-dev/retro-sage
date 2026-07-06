@@ -6,7 +6,7 @@ El detalle de cada versión vive aquí; el README solo mantiene la tabla resumen
 ```
 v0.1 ──► v0.1.x ──► v0.2 ──► v0.3 ──► v0.4 ──► v1.0
 scaffold  robustez  embeddings  Claude   feedback  estable
-   ✅        ⬜         ⬜         ⬜        ⬜        ⬜
+   ✅        ✅         ⬜         ⬜        ⬜        ⬜
 ```
 
 ---
@@ -21,7 +21,7 @@ Perfil de jugador + scoring por afinidad, sin dependencias.
 - [x] CLI `retro-sage recommend` con `--push`, `--top`, `--vault`, `--file`
 - [x] Tests sin red, CI (ruff + pytest, py3.11/3.12), pre-commit — espejo de Retro Vault
 
-## 🔶 Fase 1 — v0.1.x · Robustez y señales extra (código hecho; falta release)
+## ✅ Fase 1 — v0.1.x · Robustez y señales extra (hecho)
 
 Endurecer lo que ya existe antes de añadir ML. Sin dependencias nuevas.
 
@@ -29,7 +29,7 @@ Endurecer lo que ya existe antes de añadir ML. Sin dependencias nuevas.
 - [x] Manejo de errores del Vault: timeouts, respuestas parciales, mensajes claros en CLI
 - [x] `retro-sage profile`: subcomando que imprime tu perfil (debug y transparencia)
 - [x] Pesos del scoring configurables por flag (`--weights 60,25,15`) para experimentar
-- [ ] Primera release etiquetada (`v0.1.0` en GitHub) desde `main`
+- [x] Primera release etiquetada ([`v0.1.0`](https://github.com/Rcerezo-dev/retro-sage/releases/tag/v0.1.0)) desde `main`
 
 **Hecho cuando:** la CLI nunca muere con traceback ante un Vault caído o un export raro.
 
