@@ -43,11 +43,11 @@ Endurecer lo que ya existe antes de añadir ML. Sin dependencias nuevas.
 - [ ] Migración `genres_list`/`players` persistidos (ver `docs/ideas/propuestas-recomendador-nlp.md` en el Vault)
 
 **Este repo:**
-- [ ] Módulo `embeddings.py`: vectoriza descripciones con `all-MiniLM-L6-v2`, caché en disco (recomputar solo lo nuevo)
-- [ ] `retro-sage similar "Chrono Trigger"` → top-N por coseno
-- [ ] `retro-sage search "rpg corto con buena historia"` → búsqueda semántica
-- [ ] Mezclar señal semántica en `recommend` (afinidad + similitud a tus favoritos)
-- [ ] Tests con vectores precomputados en fixtures (sin descargar el modelo en CI)
+- [x] Módulo `embeddings.py`: vectoriza descripciones con `all-MiniLM-L6-v2`, caché en disco (recomputar solo lo nuevo)
+- [x] `retro-sage similar "Chrono Trigger"` → top-N por coseno
+- [x] `retro-sage search "rpg corto con buena historia"` → búsqueda semántica
+- [x] Mezclar señal semántica en `recommend` (afinidad + similitud a tus favoritos)
+- [x] Tests con vectores precomputados en fixtures (sin descargar el modelo en CI)
 
 **Hecho cuando:** `similar` y `search` funcionan offline tras el primer run, y `recommend` mejora de forma visible con la señal semántica.
 
