@@ -5,6 +5,8 @@ Uso:
     retro-sage profile   [--vault URL | --file export.json]
     retro-sage similar "Chrono Trigger" [--top N]     (requiere el extra [embeddings])
     retro-sage search "rpg corto con buena historia"  (requiere el extra [embeddings])
+    retro-sage ask "como Zelda pero más corto"        (requiere el extra [chat] y credenciales)
+    retro-sage recommend --explain                    (razones ricas vía Claude; degrada sin credenciales)
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import __version__, embeddings
+from . import __version__, chat, embeddings
 from .profile import Profile, build_profile
 from .scorer import DEFAULT_WEIGHTS, recommend
 from .vault_client import (
@@ -62,6 +64,15 @@ def _print_affinities(label: str, prefs: dict, top: int = 8) -> None:
         print(f"  {weight:+.2f}  {key}")
 
 
+def _semantic_similarity(games: list[dict]) -> dict | None:
+    """Señal semántica si hay extra [embeddings]; None si no (modo v0.1)."""
+    try:
+        vectors = embeddings.embed_games(games)
+        return embeddings.similarity_to_favorites(games, vectors) or None
+    except embeddings.EmbeddingsError:
+        return None
+
+
 def _cmd_recommend(args: argparse.Namespace) -> int:
     games = _load_games(args)
     profile = build_profile(games)
@@ -72,17 +83,19 @@ def _cmd_recommend(args: argparse.Namespace) -> int:
         )
         return 0
 
-    similarity = None
-    try:
-        vectors = embeddings.embed_games(games)
-        similarity = embeddings.similarity_to_favorites(games, vectors) or None
-    except embeddings.EmbeddingsError:
-        pass  # sin extra [embeddings]: scoring v0.1, misma salida de siempre
-
+    similarity = _semantic_similarity(games)
     items = recommend(games, profile, top=args.top, weights=args.weights, similarity=similarity)
     if not items:
         print("Perfil construido, pero ningún juego sin jugar coincide con tus gustos todavía.")
         return 0
+
+    if args.explain:
+        try:
+            reasons = chat.explain(items, profile, games, model=args.model)
+            for item in items:
+                item["reason"] = reasons.get(item["id"], item["reason"])
+        except chat.ChatError as exc:
+            print(f"({exc} — se muestran las razones del scorer local)", file=sys.stderr)
 
     semantic_note = " · señal semántica activa" if similarity else ""
     print(f"Perfil: {profile.signals} señales · biblioteca: {len(games)} juegos{semantic_note}\n")
@@ -189,6 +202,26 @@ def _cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ask(args: argparse.Namespace) -> int:
+    games = _load_games(args)
+    profile = build_profile(games)
+    if not profile.is_usable(MIN_SIGNALS):
+        print(
+            f"Aún no hay perfil que construir ({profile.signals} señales; mínimo {MIN_SIGNALS}).\n"
+            "Marca ratings ★, completa juegos o juega unas sesiones en Retro Vault y vuelve."
+        )
+        return 0
+    # Control de coste: Claude solo ve los candidatos ya filtrados por el scorer local.
+    items = recommend(
+        games, profile, top=chat.MAX_CANDIDATES, similarity=_semantic_similarity(games)
+    )
+    if not items:
+        print("Ningún juego sin jugar encaja con tu perfil todavía; nada que preguntar a Claude.")
+        return 0
+    print(chat.ask(args.question, profile, items, games, model=args.model))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="retro-sage", description=__doc__)
     parser.add_argument("--version", action="version", version=f"retro-sage {__version__}")
@@ -211,6 +244,16 @@ def main(argv: list[str] | None = None) -> int:
             "el 4º solo cuenta con el extra [embeddings])"
         ),
     )
+    rec.add_argument(
+        "--explain",
+        action="store_true",
+        help="Razones ricas vía Claude (extra [chat]); sin credenciales degrada al scorer local",
+    )
+    rec.add_argument(
+        "--model",
+        default=chat.DEFAULT_MODEL,
+        help=f"Modelo de Claude para --explain (default {chat.DEFAULT_MODEL})",
+    )
     rec.set_defaults(func=_cmd_recommend)
 
     prof = subparsers.add_parser("profile", help="Muestra tu perfil de afinidades (debug).")
@@ -229,10 +272,20 @@ def main(argv: list[str] | None = None) -> int:
     sea.add_argument("--top", type=int, default=10, help="Nº de resultados")
     sea.set_defaults(func=_cmd_search)
 
+    ask = subparsers.add_parser("ask", help="Consulta libre razonada por Claude (extra [chat]).")
+    add_source_args(ask)
+    ask.add_argument("question", help='Consulta libre, p. ej. "como Zelda pero más corto"')
+    ask.add_argument(
+        "--model",
+        default=chat.DEFAULT_MODEL,
+        help=f"Modelo de Claude (default {chat.DEFAULT_MODEL})",
+    )
+    ask.set_defaults(func=_cmd_ask)
+
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (VaultError, embeddings.EmbeddingsError) as exc:
+    except (VaultError, embeddings.EmbeddingsError, chat.ChatError) as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 1
 

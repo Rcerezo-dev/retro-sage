@@ -55,10 +55,10 @@ Endurecer lo que ya existe antes de añadir ML. Sin dependencias nuevas.
 
 Recomendaciones con razonamiento en lenguaje natural. Extra `[chat]` (`anthropic`).
 
-- [ ] `retro-sage ask "como Zelda pero más corto"` → Claude recibe perfil + candidatos y razona la respuesta
-- [ ] `recommend --explain`: razones ricas ("lo dejaste a medias en 2024, y es del mismo estudio que…") en vez de la plantilla del scorer
-- [ ] Degradación limpia: sin `ANTHROPIC_API_KEY`, mensaje claro y fallback al modo v0.1
-- [ ] Control de coste: un solo request por invocación, candidatos ya filtrados por el scorer local
+- [x] `retro-sage ask "como Zelda pero más corto"` → Claude recibe perfil + candidatos y razona la respuesta
+- [x] `recommend --explain`: razones ricas ("lo dejaste a medias en 2024, y es del mismo estudio que…") en vez de la plantilla del scorer
+- [x] Degradación limpia: sin `ANTHROPIC_API_KEY`, mensaje claro y fallback al modo v0.1
+- [x] Control de coste: un solo request por invocación, candidatos ya filtrados por el scorer local
 
 **Hecho cuando:** `ask` responde bien a consultas libres y todo sigue funcionando igual sin API key.
 

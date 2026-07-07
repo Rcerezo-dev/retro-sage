@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from retro_sage import embeddings
+from retro_sage import chat, embeddings
 from retro_sage.cli import main
 
 
@@ -155,3 +155,63 @@ def test_similar_usa_la_cache_en_la_segunda_pasada(export_file, fake_model, caps
     llamadas = fake_model.texts_seen
     assert main(["similar", "Tetris", "--file", export_file]) == 0
     assert fake_model.texts_seen == llamadas  # nada que recomputar
+
+
+def _fake_claude(monkeypatch, text: str):
+    """Sustituye el cliente de anthropic por uno fake que devuelve `text`."""
+    from types import SimpleNamespace
+
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text=text)], stop_reason="end_turn"
+        )
+
+    fake = SimpleNamespace(messages=SimpleNamespace(create=create), calls=calls)
+    monkeypatch.setattr(chat, "_client", lambda: fake)
+    return fake
+
+
+def test_ask_responde_con_un_solo_request(export_file, monkeypatch, capsys):
+    fake = _fake_claude(monkeypatch, "Juega a Terranigma: encaja con tus rpg de SNES.")
+    assert main(["ask", "algo largo y épico", "--file", export_file]) == 0
+    assert "Terranigma" in capsys.readouterr().out
+    assert len(fake.calls) == 1
+
+
+def test_ask_sin_credenciales_falla_limpio(export_file, monkeypatch, capsys):
+    def sin_credenciales():
+        raise chat.ChatError('pip install "retro-sage[chat]"')
+
+    monkeypatch.setattr(chat, "_client", sin_credenciales)
+    assert main(["ask", "lo que sea", "--file", export_file]) == 1
+    assert "retro-sage[chat]" in capsys.readouterr().err
+
+
+def test_recommend_explain_reescribe_las_razones(export_file, monkeypatch, capsys):
+    razones = json.dumps(
+        {
+            "reasons": [
+                {"id": 5, "reason": "Como Chrono Trigger pero sobre resucitar el mundo."},
+                {"id": 6, "reason": "El rpg más raro de tu SNES, y eso te va."},
+            ]
+        }
+    )
+    fake = _fake_claude(monkeypatch, razones)
+    assert main(["recommend", "--file", export_file, "--explain", "--top", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "resucitar el mundo" in out
+    assert len(fake.calls) == 1
+
+
+def test_recommend_explain_sin_credenciales_degrada_a_v01(export_file, monkeypatch, capsys):
+    def sin_credenciales():
+        raise chat.ChatError("No hay credenciales de la API de Claude")
+
+    monkeypatch.setattr(chat, "_client", sin_credenciales)
+    assert main(["recommend", "--file", export_file, "--explain"]) == 0
+    captured = capsys.readouterr()
+    assert "Sin jugar todavía" in captured.out  # razones del scorer local, como v0.1
+    assert "razones del scorer local" in captured.err
