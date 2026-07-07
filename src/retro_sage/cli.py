@@ -5,8 +5,8 @@ Uso:
     retro-sage profile   [--vault URL | --file export.json]
     retro-sage similar "Chrono Trigger" [--top N]     (requiere el extra [embeddings])
     retro-sage search "rpg corto con buena historia"  (requiere el extra [embeddings])
-    retro-sage ask "como Zelda pero más corto"        (requiere el extra [chat] y credenciales)
-    retro-sage recommend --explain                    (razones ricas vía Claude; degrada sin credenciales)
+    retro-sage ask "como Zelda pero más corto"        (GEMINI_API_KEY gratis, o extra [chat] + Claude)
+    retro-sage recommend --explain                    (razones ricas vía IA; degrada sin credenciales)
 """
 
 from __future__ import annotations
@@ -251,8 +251,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     rec.add_argument(
         "--model",
-        default=chat.DEFAULT_MODEL,
-        help=f"Modelo de Claude para --explain (default {chat.DEFAULT_MODEL})",
+        default=None,
+        help="Modelo para --explain (default: gemini-2.5-flash con GEMINI_API_KEY; si no, claude-opus-4-8)",
     )
     rec.set_defaults(func=_cmd_recommend)
 
@@ -277,8 +277,8 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("question", help='Consulta libre, p. ej. "como Zelda pero más corto"')
     ask.add_argument(
         "--model",
-        default=chat.DEFAULT_MODEL,
-        help=f"Modelo de Claude (default {chat.DEFAULT_MODEL})",
+        default=None,
+        help="Modelo (default: gemini-2.5-flash con GEMINI_API_KEY; si no, claude-opus-4-8)",
     )
     ask.set_defaults(func=_cmd_ask)
 

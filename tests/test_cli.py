@@ -206,6 +206,19 @@ def test_recommend_explain_reescribe_las_razones(export_file, monkeypatch, capsy
     assert len(fake.calls) == 1
 
 
+def test_ask_con_gemini_free_tier(export_file, monkeypatch, capsys):
+    monkeypatch.setenv("GEMINI_API_KEY", "clave-test")
+    monkeypatch.setattr(
+        chat,
+        "_post_json",
+        lambda url, body, headers: {
+            "candidates": [{"content": {"parts": [{"text": "Terranigma encaja contigo."}]}}]
+        },
+    )
+    assert main(["ask", "algo largo", "--file", export_file]) == 0
+    assert "Terranigma" in capsys.readouterr().out
+
+
 def test_recommend_explain_sin_credenciales_degrada_a_v01(export_file, monkeypatch, capsys):
     def sin_credenciales():
         raise chat.ChatError("No hay credenciales de la API de Claude")

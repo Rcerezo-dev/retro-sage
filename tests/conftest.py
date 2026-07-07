@@ -24,6 +24,13 @@ def _game(gid: int, title: str, platform: str, genre: str | None, year, **signal
     }
 
 
+@pytest.fixture(autouse=True)
+def _sin_credenciales_reales(monkeypatch):
+    """Los tests nunca tocan APIs reales: fuera credenciales del entorno."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+
 @pytest.fixture
 def library() -> list[dict]:
     """Usuario al que le encantan los RPG de SNES de los 90 y odia los deportes."""

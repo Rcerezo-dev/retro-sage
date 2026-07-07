@@ -59,6 +59,7 @@ Recomendaciones con razonamiento en lenguaje natural. Extra `[chat]` (`anthropic
 - [x] `recommend --explain`: razones ricas ("lo dejaste a medias en 2024, y es del mismo estudio que…") en vez de la plantilla del scorer
 - [x] Degradación limpia: sin `ANTHROPIC_API_KEY`, mensaje claro y fallback al modo v0.1
 - [x] Control de coste: un solo request por invocación, candidatos ya filtrados por el scorer local
+- [x] Backend alternativo gratuito: Gemini free tier vía `GEMINI_API_KEY` (urllib puro, sin dependencias ni extra)
 
 **Hecho cuando:** `ask` responde bien a consultas libres y todo sigue funcionando igual sin API key.
 

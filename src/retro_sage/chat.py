@@ -1,21 +1,28 @@
-"""Modo explicado con Claude API (v0.3) — requiere el extra opcional [chat].
+"""Modo explicado con IA (v0.3): Claude API o Gemini (free tier).
 
-El núcleo sigue stdlib-only: `anthropic` se importa de forma perezosa dentro
-de `_client()`. Control de coste: un solo request por invocación, con los
-candidatos ya filtrados y puntuados por el scorer local.
+Dos backends detrás del mismo `_complete()`:
+- **Gemini** si hay `GEMINI_API_KEY` en el entorno (free tier de Google AI
+  Studio): API REST con urllib puro, sin dependencias — ni siquiera el extra.
+- **Claude** en caso contrario: extra opcional [chat] (`anthropic`, import
+  perezoso); el SDK resuelve ANTHROPIC_API_KEY o un perfil de `ant auth login`.
 
-Sin credenciales (ANTHROPIC_API_KEY, o un perfil de `ant auth login` que el
-SDK detecta solo) se lanza `ChatError`: `ask` muestra el mensaje y sale
-limpio, `recommend --explain` degrada a las razones del scorer (modo v0.1).
+Control de coste: un solo request por invocación, con los candidatos ya
+filtrados y puntuados por el scorer local. Sin backend disponible se lanza
+`ChatError`: `ask` muestra el mensaje y sale limpio, `recommend --explain`
+degrada a las razones del scorer (modo v0.1).
 """
 
 from __future__ import annotations
 
 import json
+import os
+import urllib.error
+import urllib.request
 
 from .profile import Profile
 
-DEFAULT_MODEL = "claude-opus-4-8"
+DEFAULT_MODELS = {"claude": "claude-opus-4-8", "gemini": "gemini-2.5-flash"}
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 MAX_TOKENS = 2000
 MAX_CANDIDATES = 30  # techo de candidatos enviados: el scorer local ya filtró
 
@@ -47,7 +54,22 @@ _EXPLAIN_SCHEMA = {
 
 
 class ChatError(RuntimeError):
-    """Falta el extra [chat], las credenciales, o falló la llamada a Claude."""
+    """No hay backend de IA disponible, o la llamada falló."""
+
+
+def _provider() -> str:
+    """'gemini' si hay GEMINI_API_KEY (free tier); 'claude' en caso contrario."""
+    return "gemini" if os.environ.get("GEMINI_API_KEY") else "claude"
+
+
+def _complete(prompt: str, model: str | None, json_schema: dict | None = None) -> str:
+    """Un único request al backend activo. Devuelve el texto de la respuesta."""
+    if _provider() == "gemini":
+        return _gemini_complete(prompt, model or DEFAULT_MODELS["gemini"], json_schema)
+    return _claude_complete(prompt, model or DEFAULT_MODELS["claude"], json_schema)
+
+
+# --- Backend Claude (extra [chat]) -------------------------------------------
 
 
 def _client():
@@ -56,7 +78,9 @@ def _client():
         import anthropic
     except ImportError as exc:
         raise ChatError(
-            'Este comando necesita el extra [chat]: pip install "retro-sage[chat]"'
+            "Sin backend de IA: exporta GEMINI_API_KEY (free tier, "
+            "https://aistudio.google.com) o instala el extra [chat] "
+            '(pip install "retro-sage[chat]") con ANTHROPIC_API_KEY.'
         ) from exc
     try:
         # Sin api_key explícita: el SDK resuelve ANTHROPIC_API_KEY o el perfil
@@ -64,13 +88,26 @@ def _client():
         return anthropic.Anthropic()
     except Exception as exc:
         raise ChatError(
-            "No hay credenciales de la API de Claude: exporta ANTHROPIC_API_KEY "
-            "o inicia sesión con `ant auth login`."
+            "No hay credenciales: exporta ANTHROPIC_API_KEY (o `ant auth login`), "
+            "o usa GEMINI_API_KEY (free tier, sin extra)."
         ) from exc
 
 
+def _claude_complete(prompt: str, model: str, json_schema: dict | None) -> str:
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": MAX_TOKENS,
+        "system": _SYSTEM,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if json_schema:
+        kwargs["output_config"] = {"format": {"type": "json_schema", "schema": json_schema}}
+    else:
+        kwargs["thinking"] = {"type": "adaptive"}
+    return _extract_text(_request(**kwargs))
+
+
 def _request(**kwargs):
-    """Un único request a Claude; cualquier fallo se convierte en ChatError."""
     client = _client()
     try:
         response = client.messages.create(**kwargs)
@@ -81,6 +118,58 @@ def _request(**kwargs):
     if getattr(response, "stop_reason", None) == "refusal":
         raise ChatError("Claude declinó responder a esta consulta.")
     return response
+
+
+# --- Backend Gemini (free tier, urllib puro) ----------------------------------
+
+
+def _gemini_complete(prompt: str, model: str, json_schema: dict | None) -> str:
+    body: dict = {
+        "system_instruction": {"parts": [{"text": _SYSTEM}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+    }
+    if json_schema:
+        body["generationConfig"] = {
+            "responseMimeType": "application/json",
+            "responseJsonSchema": json_schema,
+        }
+    payload = _post_json(
+        GEMINI_URL.format(model=model),
+        body,
+        {
+            "Content-Type": "application/json",
+            "x-goog-api-key": os.environ["GEMINI_API_KEY"],
+        },
+    )
+    try:
+        parts = payload["candidates"][0]["content"]["parts"]
+        return "".join(part.get("text", "") for part in parts)
+    except (KeyError, IndexError, TypeError) as exc:
+        candidates = payload.get("candidates") or [{}]
+        reason = (
+            payload.get("promptFeedback", {}).get("blockReason")
+            or candidates[0].get("finishReason")
+            or "respuesta vacía"
+        )
+        raise ChatError(f"Gemini no devolvió respuesta ({reason}).") from exc
+
+
+def _post_json(url: str, body: dict, headers: dict) -> dict:
+    """POST JSON con urllib; separado para poder fakearlo en los tests."""
+    request = urllib.request.Request(  # noqa: S310
+        url,
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=120) as resp:  # noqa: S310
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        raise ChatError(f"La llamada a Gemini falló ({exc.code}): {detail}") from exc
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
+        raise ChatError(f"La llamada a Gemini falló: {exc}") from exc
 
 
 def _extract_text(response) -> str:
@@ -123,7 +212,7 @@ def ask(
     profile: Profile,
     items: list[dict],
     games: list[dict],
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
 ) -> str:
     """Responde una consulta libre razonando sobre perfil + candidatos. Un request."""
     by_id = {g.get("id"): g for g in games}
@@ -137,21 +226,14 @@ def ask(
         "por qué en 1-2 frases por juego, conectando con su perfil. "
         "Si ninguno encaja de verdad, dilo claramente en vez de forzar una respuesta."
     )
-    response = _request(
-        model=model,
-        max_tokens=MAX_TOKENS,
-        system=_SYSTEM,
-        thinking={"type": "adaptive"},
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = _extract_text(response).strip()
+    text = _complete(prompt, model).strip()
     if not text:
-        raise ChatError("Claude devolvió una respuesta vacía.")
+        raise ChatError("El modelo devolvió una respuesta vacía.")
     return text
 
 
 def explain(
-    items: list[dict], profile: Profile, games: list[dict], model: str = DEFAULT_MODEL
+    items: list[dict], profile: Profile, games: list[dict], model: str | None = None
 ) -> dict:
     """Razones ricas para items ya puntuados. Devuelve {id: razón}. Un request."""
     by_id = {g.get("id"): g for g in games}
@@ -164,15 +246,8 @@ def explain(
         "personal y concreta, que conecte el juego con el perfil del jugador. "
         "Sin fórmulas repetidas entre juegos."
     )
-    response = _request(
-        model=model,
-        max_tokens=MAX_TOKENS,
-        system=_SYSTEM,
-        output_config={"format": {"type": "json_schema", "schema": _EXPLAIN_SCHEMA}},
-        messages=[{"role": "user", "content": prompt}],
-    )
     try:
-        data = json.loads(_extract_text(response))
+        data = json.loads(_complete(prompt, model, json_schema=_EXPLAIN_SCHEMA))
         return {entry["id"]: entry["reason"] for entry in data["reasons"]}
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise ChatError("Claude devolvió un formato inesperado.") from exc
+        raise ChatError("El modelo devolvió un formato inesperado.") from exc
