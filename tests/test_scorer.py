@@ -82,6 +82,23 @@ def test_is_candidate_tolerates_string_play_count():
     assert is_candidate({"play_count": "0", "tags": []})
 
 
+def test_semantic_similarity_sube_al_candidato_parecido(library):
+    profile = build_profile(library)
+    similarity = {g["id"]: 0.0 for g in library}
+    similarity[6] = 1.0  # Earthbound clavado a los favoritos
+    items = recommend(library, profile, similarity=similarity)
+    assert items[0]["title"] == "Earthbound"
+    assert "se parece a lo que mejor puntúas" in items[0]["reason"]
+
+
+def test_sin_similitud_el_scoring_es_identico_a_v01(library):
+    profile = build_profile(library)
+    v01 = recommend(library, profile, weights=(0.60, 0.25, 0.15))
+    v02_degradado = recommend(library, profile, weights=(60.0, 25.0, 15.0, 30.0))
+    assert v01 == v02_degradado
+    assert v01 == recommend(library, profile, similarity={})  # dict vacío = sin señal
+
+
 def test_recommend_empty_when_no_positive_affinity(library):
     # Perfil de alguien que solo ha odiado un puzzle: nada de la lista encaja
     hater = [

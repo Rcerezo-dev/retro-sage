@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from retro_sage.embeddings import cosine, embed_games, game_text
+from retro_sage.embeddings import cosine, embed_games, game_text, similarity_to_favorites
 
 
 def test_game_text_compone_los_campos_disponibles(library):
@@ -37,6 +37,20 @@ def test_embed_games_cachea_y_solo_recomputa_lo_nuevo(library, fake_encoder, tmp
     library[0]["description"] = "ahora es otro texto"
     embed_games(library, encoder=fake_encoder, cache_path=cache)
     assert fake_encoder.texts_seen == len(library) + 1
+
+
+def test_similarity_to_favorites_ordena_por_parecido(library, fake_encoder, tmp_path):
+    vectors = embed_games(library, encoder=fake_encoder, cache_path=tmp_path / "cache.json")
+    sims = similarity_to_favorites(library, vectors)
+    assert sims[6] > sims[7]  # Earthbound (rpg) más cerca de los favoritos que FIFA
+    assert sims[7] == 0.0  # deporte ortogonal a un perfil rpg
+    assert 0.0 <= min(sims.values()) and max(sims.values()) <= 1.0
+
+
+def test_similarity_sin_favoritos_devuelve_vacio(fake_encoder, tmp_path):
+    games = [{"id": 1, "title": "x", "genre": "RPG"}]  # nadie con señal positiva
+    vectors = embed_games(games, encoder=fake_encoder, cache_path=tmp_path / "cache.json")
+    assert similarity_to_favorites(games, vectors) == {}
 
 
 def test_embed_games_ignora_cache_corrupta(library, fake_encoder, tmp_path):

@@ -16,6 +16,8 @@ import math
 import os
 from pathlib import Path
 
+from .profile import signal_weight
+
 MODEL_NAME = "all-MiniLM-L6-v2"
 
 
@@ -81,10 +83,35 @@ def embed_games(games: list[dict], encoder=None, cache_path: Path | None = None)
         vectors = encoder([text for _, text in pending])
         for (gid, _), vec in zip(pending, vectors):
             cache[keys[gid]] = list(map(float, vec))
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(cache), encoding="utf-8")
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(cache), encoding="utf-8")
+        except OSError:
+            pass  # sin caché se recomputa la próxima vez; nunca es motivo de fallo
 
     return {gid: cache[key] for gid, key in keys.items()}
+
+
+def similarity_to_favorites(games: list[dict], vectors: dict) -> dict:
+    """Similitud [0, 1] de cada juego con los favoritos del usuario.
+
+    Favoritos = juegos con señal positiva; su coseno con cada juego se pondera
+    por `signal_weight` (un ★5 completado pesa más que un 'playing'). Sin
+    favoritos devuelve {} y el scorer ignora la señal semántica.
+    """
+    favorites = []
+    for game in games:
+        weight = signal_weight(game)
+        vec = vectors.get(game.get("id"))
+        if weight > 0 and vec:
+            favorites.append((weight, vec))
+    if not favorites:
+        return {}
+    total_weight = sum(weight for weight, _ in favorites)
+    return {
+        gid: max(0.0, sum(w * cosine(vec, fav) for w, fav in favorites) / total_weight)
+        for gid, vec in vectors.items()
+    }
 
 
 def cosine(a: list[float], b: list[float]) -> float:

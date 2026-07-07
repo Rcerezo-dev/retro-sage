@@ -96,6 +96,10 @@ def test_weights_flag(tmp_path, library, capsys):
     assert main(["recommend", "--file", str(export), "--weights", "100,0,0"]) == 0
     assert "Terranigma" in capsys.readouterr().out
 
+    # 4º peso (semántica): aceptado, y sin extra [embeddings] no cambia nada
+    assert main(["recommend", "--file", str(export), "--weights", "60,25,15,100"]) == 0
+    assert "señal semántica" not in capsys.readouterr().out
+
     with pytest.raises(SystemExit):  # argparse rechaza formatos inválidos
         main(["recommend", "--file", str(export), "--weights", "1,2"])
     with pytest.raises(SystemExit):
@@ -137,6 +141,13 @@ def test_sin_extra_embeddings_mensaje_claro(export_file, monkeypatch, capsys):
     monkeypatch.setenv("LOCALAPPDATA", "cache-inexistente")
     assert main(["search", "lo que sea", "--file", export_file]) == 1
     assert "retro-sage[embeddings]" in capsys.readouterr().err
+
+
+def test_recommend_con_extra_activa_senal_semantica(export_file, fake_model, capsys):
+    assert main(["recommend", "--file", export_file, "--top", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "señal semántica activa" in out
+    assert "Terranigma" in out or "Earthbound" in out
 
 
 def test_similar_usa_la_cache_en_la_segunda_pasada(export_file, fake_model, capsys):

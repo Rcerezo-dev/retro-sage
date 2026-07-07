@@ -1,7 +1,7 @@
 """CLI de Retro Sage.
 
 Uso:
-    retro-sage recommend [--vault URL | --file export.json] [--top N] [--push] [--weights G,P,D]
+    retro-sage recommend [--vault URL | --file export.json] [--top N] [--push] [--weights G,P,D[,S]]
     retro-sage profile   [--vault URL | --file export.json]
     retro-sage similar "Chrono Trigger" [--top N]     (requiere el extra [embeddings])
     retro-sage search "rpg corto con buena historia"  (requiere el extra [embeddings])
@@ -31,18 +31,26 @@ def _load_games(args: argparse.Namespace) -> list[dict]:
     return payload["games"]
 
 
-def _parse_weights(text: str) -> tuple[float, float, float]:
-    """'60,25,15' → (0.60, 0.25, 0.15) — normaliza para que sumen 1."""
+def _parse_weights(text: str) -> tuple[float, float, float, float]:
+    """'60,25,15' o '60,25,15,30' — el 4º es la señal semántica (extra [embeddings]).
+
+    Devuelve los pesos crudos; el scorer los normaliza según haya o no vectores.
+    """
     try:
-        genre, platform, decade = (float(tok) for tok in text.split(","))
+        parts = tuple(float(tok) for tok in text.split(","))
     except ValueError:
+        parts = ()
+    if len(parts) == 3:
+        parts = (*parts, DEFAULT_WEIGHTS[3])
+    if len(parts) != 4:
         raise argparse.ArgumentTypeError(
-            "formato: GÉNERO,PLATAFORMA,DÉCADA — p. ej. --weights 60,25,15"
-        ) from None
-    total = genre + platform + decade
-    if min(genre, platform, decade) < 0 or total <= 0:
-        raise argparse.ArgumentTypeError("los pesos deben ser ≥ 0 y sumar más de 0")
-    return (genre / total, platform / total, decade / total)
+            "formato: GÉNERO,PLATAFORMA,DÉCADA[,SEMÁNTICA] — p. ej. --weights 60,25,15,30"
+        )
+    if min(parts) < 0 or sum(parts[:3]) <= 0:
+        raise argparse.ArgumentTypeError(
+            "los pesos deben ser ≥ 0 y los tres primeros sumar más de 0"
+        )
+    return parts
 
 
 def _print_affinities(label: str, prefs: dict, top: int = 8) -> None:
@@ -64,12 +72,20 @@ def _cmd_recommend(args: argparse.Namespace) -> int:
         )
         return 0
 
-    items = recommend(games, profile, top=args.top, weights=args.weights)
+    similarity = None
+    try:
+        vectors = embeddings.embed_games(games)
+        similarity = embeddings.similarity_to_favorites(games, vectors) or None
+    except embeddings.EmbeddingsError:
+        pass  # sin extra [embeddings]: scoring v0.1, misma salida de siempre
+
+    items = recommend(games, profile, top=args.top, weights=args.weights, similarity=similarity)
     if not items:
         print("Perfil construido, pero ningún juego sin jugar coincide con tus gustos todavía.")
         return 0
 
-    print(f"Perfil: {profile.signals} señales · biblioteca: {len(games)} juegos\n")
+    semantic_note = " · señal semántica activa" if similarity else ""
+    print(f"Perfil: {profile.signals} señales · biblioteca: {len(games)} juegos{semantic_note}\n")
     width = max(len(item["title"] or "?") for item in items)
     for rank, item in enumerate(items, start=1):
         title = (item["title"] or "?").ljust(width)
@@ -190,7 +206,10 @@ def main(argv: list[str] | None = None) -> int:
         "--weights",
         type=_parse_weights,
         default=DEFAULT_WEIGHTS,
-        help="Pesos género,plataforma,década (default 60,25,15; se normalizan)",
+        help=(
+            "Pesos género,plataforma,década[,semántica] (default 60,25,15,30; se normalizan; "
+            "el 4º solo cuenta con el extra [embeddings])"
+        ),
     )
     rec.set_defaults(func=_cmd_recommend)
 
