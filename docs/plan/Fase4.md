@@ -28,7 +28,7 @@
 
 ## Bloque A — Cimientos (no dependen del Vault, con fixtures ya)
 
-### A1. Historial local de recomendaciones pasadas
+### A1. Historial local de recomendaciones pasadas — ✅ hecho (PR #4)
 
 Cada vez que `recommend --push` (o `ask`) entrega una lista, guardarla en un
 log local propio de Sage — stdlib puro (`json` + `pathlib`), mismo patrón de
@@ -42,7 +42,7 @@ existe una convención). Una entrada por recomendación: `game_id`, `title`,
 - Hecho cuando: cada `recommend --push` añade N entradas al historial local;
   ejecuciones repetidas no corrompen el fichero (append, no overwrite).
 
-### A2. Cruce historial vs export → acierto / fallo / pendiente
+### A2. Cruce historial vs export → acierto / fallo / pendiente — ✅ hecho
 
 Función pura: dado el historial local + el export actual (mismo shape que
 `tests/conftest.py`), clasifica cada recomendación pasada:
