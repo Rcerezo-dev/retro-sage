@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from retro_sage import chat, embeddings
+from retro_sage import chat, embeddings, history
 from retro_sage.cli import main
 
 
@@ -228,3 +228,16 @@ def test_recommend_explain_sin_credenciales_degrada_a_v01(export_file, monkeypat
     captured = capsys.readouterr()
     assert "Sin jugar todavía" in captured.out  # razones del scorer local, como v0.1
     assert "razones del scorer local" in captured.err
+
+
+def test_recommend_push_registra_historial_local(export_file, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr("retro_sage.cli.push_recommendations", lambda items, vault: len(items))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "cache"))
+
+    assert main(["recommend", "--file", export_file, "--push", "--top", "3"]) == 0
+    assert "recomendaciones enviadas" in capsys.readouterr().out
+
+    entries = history.load_history(tmp_path / "cache" / "retro-sage" / "history.jsonl")
+    assert {e["title"] for e in entries} <= {"Terranigma", "Earthbound", "FIFA 96", "Tetris"}
+    assert entries  # al menos un candidato encajó
+    assert all(e["recommended_at"] for e in entries)
