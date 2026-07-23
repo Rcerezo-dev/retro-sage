@@ -71,7 +71,7 @@ global y desglose por género/plataforma. Reusa el patrón de errores existente
 - Hecho cuando: `retro-sage stats --file export.json` imprime
   aciertos/fallos/pendientes y % de acierto; sin historial, no rompe y lo dice.
 
-### A4. Ajuste heurístico de pesos con el histórico
+### A4. Ajuste heurístico de pesos con el histórico — ✅ hecho
 
 Heurística simple, **nada de ML entrenado** (regla del ROADMAP): antes de
 puntuar candidatos en `scorer.py`, atenuar/reforzar la afinidad de un

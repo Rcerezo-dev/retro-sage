@@ -17,6 +17,10 @@ from dataclasses import dataclass, field
 _STATUS_WEIGHT = {"completed": 1.0, "playing": 0.8, "dropped": -0.8}
 _GENRE_SPLIT = re.compile(r"[,/;|]| - ")
 
+# Bucle de feedback (v0.4): ajuste heurístico acotado, no ML entrenado.
+FEEDBACK_ADJUSTMENT = 0.15  # factor máximo: ±15% de la afinidad existente
+MIN_RESOLVED_PER_TOKEN = 3  # ignora tokens con muestra pequeña (mismo umbral que MIN_SIGNALS)
+
 
 @dataclass(slots=True)
 class Profile:
@@ -99,3 +103,66 @@ def build_profile(games: list[dict]) -> Profile:
         if dec is not None:
             profile.decades[dec] = profile.decades.get(dec, 0.0) + weight
     return profile
+
+
+def _hit_rates(evaluated: list[dict], games_by_id: dict, tokens_of) -> dict[str, float]:
+    """token → tasa de acierto, solo para tokens con >= MIN_RESOLVED_PER_TOKEN resueltos.
+
+    Pendientes no cuentan como resueltos (ni a favor ni en contra).
+    """
+    counts: dict[str, list[int]] = {}  # token -> [aciertos, resueltos]
+    for entry in evaluated:
+        if entry["outcome"] == "pendiente":
+            continue
+        game = games_by_id.get(entry["game_id"])
+        if game is None:
+            continue
+        for token in tokens_of(game):
+            bucket = counts.setdefault(token, [0, 0])
+            bucket[1] += 1
+            if entry["outcome"] == "acierto":
+                bucket[0] += 1
+    return {
+        token: hits / resolved
+        for token, (hits, resolved) in counts.items()
+        if resolved >= MIN_RESOLVED_PER_TOKEN
+    }
+
+
+def _apply_hit_rates(prefs: dict[str, float], hit_rates: dict[str, float]) -> dict[str, float]:
+    """Reescala cada afinidad ya existente en `prefs` según su tasa de acierto.
+
+    50% de acierto = neutro (factor 1.0); 100% = +FEEDBACK_ADJUSTMENT; 0% =
+    -FEEDBACK_ADJUSTMENT. Tokens sin afinidad previa no se tocan — el
+    histórico solo refuerza o atenúa gustos ya detectados, no inventa nuevos.
+    """
+    adjusted = dict(prefs)
+    for token, rate in hit_rates.items():
+        if token in adjusted:
+            factor = 1 + FEEDBACK_ADJUSTMENT * (rate - 0.5) * 2
+            adjusted[token] *= factor
+    return adjusted
+
+
+def adjust_profile_with_feedback(
+    profile: Profile, evaluated: list[dict], games: list[dict]
+) -> Profile:
+    """Refuerza/atenúa afinidades de `profile` según el historial de recomendaciones.
+
+    Heurística acotada (± FEEDBACK_ADJUSTMENT), nada de ML entrenado. Sin
+    histórico suficiente por token, ese género/plataforma queda idéntico —
+    con un `evaluated` vacío, `profile` sale exactamente igual que hoy.
+    """
+    games_by_id = {g.get("id"): g for g in games}
+    genre_rates = _hit_rates(evaluated, games_by_id, affinity_tokens)
+    platform_rates = _hit_rates(
+        evaluated,
+        games_by_id,
+        lambda g: [g["platform"].lower()] if g.get("platform") else [],
+    )
+    return Profile(
+        genres=_apply_hit_rates(profile.genres, genre_rates),
+        platforms=_apply_hit_rates(profile.platforms, platform_rates),
+        decades=dict(profile.decades),
+        signals=profile.signals,
+    )
