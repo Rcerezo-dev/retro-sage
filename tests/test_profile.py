@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from retro_sage.profile import (
+    FEEDBACK_ADJUSTMENT,
+    Profile,
+    adjust_profile_with_feedback,
     affinity_tokens,
     build_profile,
     decade_of,
@@ -71,3 +74,52 @@ def test_profile_unusable_without_signals():
     profile = build_profile([{"id": 1, "title": "x", "platform": "gb", "genre": "Puzzle"}])
     assert profile.signals == 0
     assert not profile.is_usable()
+
+
+_FEEDBACK_GAMES = [
+    {"id": 1, "genre": "RPG", "platform": "snes"},
+    {"id": 2, "genre": "RPG", "platform": "snes"},
+    {"id": 3, "genre": "RPG", "platform": "snes"},
+]
+
+
+def test_adjust_profile_baja_la_afinidad_con_fallos_repetidos():
+    profile = Profile(genres={"rpg": 1.0}, signals=5)
+    evaluated = [{"game_id": gid, "outcome": "fallo"} for gid in (1, 2, 3)]
+    adjusted = adjust_profile_with_feedback(profile, evaluated, _FEEDBACK_GAMES)
+    assert adjusted.genres["rpg"] == 1.0 * (1 - FEEDBACK_ADJUSTMENT)
+
+
+def test_adjust_profile_sube_la_afinidad_con_aciertos_repetidos():
+    profile = Profile(genres={"rpg": 1.0}, signals=5)
+    evaluated = [{"game_id": gid, "outcome": "acierto"} for gid in (1, 2, 3)]
+    adjusted = adjust_profile_with_feedback(profile, evaluated, _FEEDBACK_GAMES)
+    assert adjusted.genres["rpg"] == 1.0 * (1 + FEEDBACK_ADJUSTMENT)
+
+
+def test_adjust_profile_ajuste_acotado_dentro_del_limite():
+    profile = Profile(genres={"rpg": 1.0}, signals=5)
+    evaluated = [{"game_id": gid, "outcome": "acierto"} for gid in (1, 2, 3)]
+    adjusted = adjust_profile_with_feedback(profile, evaluated, _FEEDBACK_GAMES)
+    assert adjusted.genres["rpg"] <= 1.0 * (1 + FEEDBACK_ADJUSTMENT)
+
+
+def test_adjust_profile_sin_historico_deja_el_perfil_igual():
+    profile = Profile(genres={"rpg": 1.0}, platforms={"snes": 0.5}, signals=5)
+    adjusted = adjust_profile_with_feedback(profile, [], _FEEDBACK_GAMES)
+    assert adjusted.genres == profile.genres
+    assert adjusted.platforms == profile.platforms
+
+
+def test_adjust_profile_ignora_tokens_con_muestra_insuficiente():
+    profile = Profile(genres={"rpg": 1.0}, signals=5)
+    evaluated = [{"game_id": 1, "outcome": "fallo"}, {"game_id": 2, "outcome": "fallo"}]  # solo 2
+    adjusted = adjust_profile_with_feedback(profile, evaluated, _FEEDBACK_GAMES)
+    assert adjusted.genres["rpg"] == 1.0  # sin cambios, bajo el umbral
+
+
+def test_adjust_profile_no_inventa_afinidades_nuevas():
+    profile = Profile(genres={}, signals=5)  # sin afinidad previa a rpg
+    evaluated = [{"game_id": gid, "outcome": "acierto"} for gid in (1, 2, 3)]
+    adjusted = adjust_profile_with_feedback(profile, evaluated, _FEEDBACK_GAMES)
+    assert "rpg" not in adjusted.genres  # el histórico refuerza, no inventa gustos

@@ -17,7 +17,7 @@ import sys
 from collections import Counter
 
 from . import __version__, chat, embeddings, history
-from .profile import Profile, affinity_tokens, build_profile
+from .profile import Profile, adjust_profile_with_feedback, affinity_tokens, build_profile
 from .scorer import DEFAULT_WEIGHTS, recommend
 from .vault_client import (
     DEFAULT_VAULT_URL,
@@ -66,6 +66,20 @@ def _print_affinities(label: str, prefs: dict, top: int = 8) -> None:
         print(f"  {weight:+.2f}  {key}")
 
 
+def _build_profile(games: list[dict]) -> Profile:
+    """Perfil base + ajuste heurístico con el historial de aciertos/fallos (Fase 4).
+
+    Sin historial local (o sin histórico suficiente por token) es idéntico a
+    `build_profile(games)` — el ajuste solo entra cuando hay señal real.
+    """
+    profile = build_profile(games)
+    entries = history.load_history()
+    if not entries:
+        return profile
+    evaluated = history.evaluate_history(entries, games)
+    return adjust_profile_with_feedback(profile, evaluated, games)
+
+
 def _semantic_similarity(games: list[dict]) -> dict | None:
     """Señal semántica si hay extra [embeddings]; None si no (modo v0.1)."""
     try:
@@ -77,7 +91,7 @@ def _semantic_similarity(games: list[dict]) -> dict | None:
 
 def _cmd_recommend(args: argparse.Namespace) -> int:
     games = _load_games(args)
-    profile = build_profile(games)
+    profile = _build_profile(games)
     if not profile.is_usable(MIN_SIGNALS):
         print(
             f"Aún no hay perfil que construir ({profile.signals} señales; mínimo {MIN_SIGNALS}).\n"
@@ -115,7 +129,7 @@ def _cmd_recommend(args: argparse.Namespace) -> int:
 
 def _cmd_profile(args: argparse.Namespace) -> int:
     games = _load_games(args)
-    profile: Profile = build_profile(games)
+    profile: Profile = _build_profile(games)
     if profile.signals == 0:
         print("Sin señales todavía: puntúa, completa o juega algo en Retro Vault.")
         return 0
@@ -207,7 +221,7 @@ def _cmd_search(args: argparse.Namespace) -> int:
 
 def _cmd_ask(args: argparse.Namespace) -> int:
     games = _load_games(args)
-    profile = build_profile(games)
+    profile = _build_profile(games)
     if not profile.is_usable(MIN_SIGNALS):
         print(
             f"Aún no hay perfil que construir ({profile.signals} señales; mínimo {MIN_SIGNALS}).\n"
