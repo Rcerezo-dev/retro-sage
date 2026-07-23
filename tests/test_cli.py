@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 
 import pytest
@@ -241,3 +242,41 @@ def test_recommend_push_registra_historial_local(export_file, monkeypatch, tmp_p
     assert {e["title"] for e in entries} <= {"Terranigma", "Earthbound", "FIFA 96", "Tetris"}
     assert entries  # al menos un candidato encajó
     assert all(e["recommended_at"] for e in entries)
+
+
+def test_stats_sin_historial_mensaje_claro(export_file, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "cache"))
+    assert main(["stats", "--file", export_file]) == 0
+    assert "Aún no hay historial" in capsys.readouterr().out
+
+
+def test_stats_calcula_tasa_de_acierto_y_desglose(export_file, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "cache"))
+    history_path = tmp_path / "cache" / "retro-sage" / "history.jsonl"
+    history_path.parent.mkdir(parents=True)
+
+    old = (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=30)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    recent = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    entries = [
+        # id=1 Chrono Trigger: ya puntuado en la fixture -> acierto (recommended_at da igual)
+        {"game_id": 1, "title": "Chrono Trigger", "platform": "snes", "recommended_at": recent},
+        # id=5 Terranigma: candidato intacto, recomendado hace 30 días -> fallo
+        {"game_id": 5, "title": "Terranigma", "platform": "snes", "recommended_at": old},
+        # id=6 Earthbound: candidato intacto, recomendado ayer -> pendiente
+        {"game_id": 6, "title": "Earthbound", "platform": "snes", "recommended_at": recent},
+    ]
+    history_path.write_text(
+        "\n".join(json.dumps(e, ensure_ascii=False) for e in entries) + "\n", encoding="utf-8"
+    )
+
+    assert main(["stats", "--file", export_file]) == 0
+    out = capsys.readouterr().out
+    assert "Aciertos:   1" in out
+    assert "Fallos:     1" in out
+    assert "Pendientes: 1" in out
+    assert "Tasa de acierto: 50%" in out
+    assert "Por género" in out
+    assert "Por plataforma" in out
+    assert "snes" in out

@@ -59,7 +59,7 @@ Función pura: dado el historial local + el export actual (mismo shape que
   recomendación vieja que luego se jugó, una vieja que sigue intacta, una
   reciente).
 
-### A3. `retro-sage stats`
+### A3. `retro-sage stats` — ✅ hecho
 
 Subcomando nuevo: carga historial local, cruza con export (`--file`/`--vault`,
 mismos flags que el resto de la CLI), imprime en español tasa de acierto

@@ -7,15 +7,17 @@ Uso:
     retro-sage search "rpg corto con buena historia"  (requiere el extra [embeddings])
     retro-sage ask "como Zelda pero más corto"        (GEMINI_API_KEY gratis, o extra [chat] + Claude)
     retro-sage recommend --explain                    (razones ricas vía IA; degrada sin credenciales)
+    retro-sage stats     [--vault URL | --file export.json]  (tasa de acierto del historial)
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from collections import Counter
 
 from . import __version__, chat, embeddings, history
-from .profile import Profile, build_profile
+from .profile import Profile, affinity_tokens, build_profile
 from .scorer import DEFAULT_WEIGHTS, recommend
 from .vault_client import (
     DEFAULT_VAULT_URL,
@@ -223,6 +225,67 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_outcome_breakdown(
+    label: str, evaluated: list[dict], games_by_id: dict, tokens_of
+) -> None:
+    """Desglosa aciertos/fallos/pendientes por el/los tokens que `tokens_of(game)` devuelva."""
+    buckets: dict[str, Counter] = {}
+    for entry in evaluated:
+        game = games_by_id[entry["game_id"]]
+        for token in tokens_of(game):
+            buckets.setdefault(token, Counter())[entry["outcome"]] += 1
+    if not buckets:
+        return
+    print(f"\n{label}:")
+    ranked = sorted(buckets.items(), key=lambda kv: sum(kv[1].values()), reverse=True)
+    for token, counter in ranked:
+        resueltos = counter["acierto"] + counter["fallo"]
+        tasa = f"{counter['acierto'] / resueltos:.0%}" if resueltos else "—"
+        print(
+            f"  {token:<20} acierto {counter['acierto']} · fallo {counter['fallo']} · "
+            f"pendiente {counter['pendiente']} · tasa {tasa}"
+        )
+
+
+def _cmd_stats(args: argparse.Namespace) -> int:
+    entries = history.load_history()
+    if not entries:
+        print(
+            "Aún no hay historial de recomendaciones — usa 'recommend --push' "
+            "unas cuantas veces y vuelve."
+        )
+        return 0
+
+    games = _load_games(args)
+    evaluated = history.evaluate_history(entries, games)
+    if not evaluated:
+        print("El historial local no coincide con ningún juego de esta biblioteca.")
+        return 0
+
+    counts = Counter(entry["outcome"] for entry in evaluated)
+    aciertos, fallos, pendientes = counts["acierto"], counts["fallo"], counts["pendiente"]
+    resueltos = aciertos + fallos
+
+    print(f"Historial: {len(evaluated)} recomendaciones evaluadas\n")
+    print(f"  Aciertos:   {aciertos}")
+    print(f"  Fallos:     {fallos}")
+    print(f"  Pendientes: {pendientes}")
+    if resueltos:
+        print(f"\nTasa de acierto: {aciertos / resueltos:.0%} (sobre {resueltos} ya resueltas)")
+    else:
+        print("\nTodas las recomendaciones evaluadas siguen pendientes; vuelve más adelante.")
+
+    games_by_id = {g.get("id"): g for g in games}
+    _print_outcome_breakdown("Por género", evaluated, games_by_id, affinity_tokens)
+    _print_outcome_breakdown(
+        "Por plataforma",
+        evaluated,
+        games_by_id,
+        lambda g: [g["platform"]] if g.get("platform") else [],
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="retro-sage", description=__doc__)
     parser.add_argument("--version", action="version", version=f"retro-sage {__version__}")
@@ -282,6 +345,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Modelo (default: gemini-2.5-flash con GEMINI_API_KEY; si no, claude-opus-4-8)",
     )
     ask.set_defaults(func=_cmd_ask)
+
+    stats = subparsers.add_parser(
+        "stats", help="Tasa de acierto de recomendaciones pasadas (bucle de feedback)."
+    )
+    add_source_args(stats)
+    stats.set_defaults(func=_cmd_stats)
 
     args = parser.parse_args(argv)
     try:
