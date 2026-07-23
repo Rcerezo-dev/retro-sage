@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import __version__, chat, embeddings
+from . import __version__, chat, embeddings, history
 from .profile import Profile, build_profile
 from .scorer import DEFAULT_WEIGHTS, recommend
 from .vault_client import (
@@ -106,6 +106,7 @@ def _cmd_recommend(args: argparse.Namespace) -> int:
 
     if args.push:
         stored = push_recommendations(items, args.vault)
+        history.record_recommendations(items)
         print(f"\n✓ {stored} recomendaciones enviadas al panel 'Recomendados' de Retro Vault.")
     return 0
 
